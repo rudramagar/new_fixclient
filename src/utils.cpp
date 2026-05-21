@@ -1,0 +1,82 @@
+#include "utils.h"
+
+#include <cstdio>
+#include <cstring>
+#include <sys/time.h>
+#include <time.h>
+
+namespace utils {
+
+std::string get_utc_timestamp() {
+    timeval now;
+    ::gettimeofday(&now, 0);
+
+    tm utc_time;
+    ::gmtime_r(&now.tv_sec, &utc_time);
+
+    char time_part[32];
+    ::strftime(time_part, sizeof(time_part), "%Y%m%d-%H:%M:%S", &utc_time);
+
+    char timestamp[64];
+    const long millis = now.tv_usec / 1000;
+    std::snprintf(timestamp, sizeof(timestamp), "%s.%03ld", time_part, millis);
+
+    return std::string(timestamp);
+}
+
+uint64_t get_monotonic_millis() {
+    timespec ts;
+    ::clock_gettime(CLOCK_MONOTONIC, &ts);
+
+    const uint64_t sec_ms = static_cast<uint64_t>(ts.tv_sec) * 1000ULL;
+    const uint64_t nsec_ms = static_cast<uint64_t>(ts.tv_nsec) / 1000000ULL;
+    return sec_ms + nsec_ms;
+}
+
+std::string to_pipe_delimited(const std::string& fix) {
+    const char SOH = '\x01';
+
+    std::string printable = fix;
+    for (size_t i = 0; i < printable.size(); ++i) {
+        if (printable[i] == SOH) {
+            printable[i] = '|';
+        }
+    }
+    return printable;
+}
+
+bool find_tag_value(const std::string& msg, const char* tag_prefix, std::string& value) {
+    const char SOH = '\x01';
+
+    size_t pos = msg.find(tag_prefix);
+    while (pos != std::string::npos) {
+        if (pos == 0 || msg[pos - 1] == SOH) {
+            break;
+        }
+        pos = msg.find(tag_prefix, pos + 1);
+    }
+
+    if (pos == std::string::npos) {
+        return false;
+    }
+
+    const size_t value_start = pos + std::strlen(tag_prefix);
+    const size_t value_end = msg.find(SOH, value_start);
+    if (value_end == std::string::npos) {
+        return false;
+    }
+
+    value.assign(msg, value_start, value_end - value_start);
+    return true;
+}
+
+std::string trim(const std::string& str) {
+    const size_t start_pos = str.find_first_not_of(" \t\r\n");
+    if (start_pos == std::string::npos) {
+        return "";
+    }
+    const size_t end_pos = str.find_last_not_of(" \t\r\n");
+    return str.substr(start_pos, end_pos - start_pos + 1);
+}
+
+}
